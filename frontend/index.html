@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日程规划表</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📅 日程规划表</h1>
+            <div class="navigation">
+                <button id="prevWeek" class="nav-btn">← 上一周</button>
+                <span id="weekInfo" class="week-info"></span>
+                <button id="nextWeek" class="nav-btn">下一周 →</button>
+            </div>
+            <div class="controls">
+                <button id="todayBtn" class="control-btn">今天</button>
+                <input type="date" id="datePicker" class="date-picker">
+            </div>
+        </header>
+
+        <div class="schedule-wrapper">
+            <table class="schedule-table" id="scheduleTable">
+                <thead>
+                    <tr id="dateHeader">
+                        <th class="time-column">时间</th>
+                        <!-- 日期列将由JS动态生成 -->
+                    </tr>
+                </thead>
+                <tbody id="scheduleBody">
+                    <!-- 时间格将由JS动态生成 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 任务编辑模态框 -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">新建任务</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <input type="hidden" id="taskId">
+                    <input type="hidden" id="taskDate">
+                    <input type="hidden" id="taskStartTime">
+                    <input type="hidden" id="taskDuration">
+                    
+                    <div class="form-group">
+                        <label for="taskTitle">任务标题 *</label>
+                        <input type="text" id="taskTitle" required placeholder="输入任务名称">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="taskLocation">地点</label>
+                        <input type="text" id="taskLocation" placeholder="输入地点">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="taskDescription">详细描述</label>
+                        <textarea id="taskDescription" rows="4" placeholder="输入任务详情"></textarea>
+                    </div>
+                    
+                    <div class="info-group">
+                        <p><strong>日期：</strong><span id="displayDate"></span></p>
+                        <p><strong>时间：</strong><span id="displayTime"></span></p>
+                        <p><strong>时长：</strong><span id="displayDuration"></span>分钟</p>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" id="deleteBtn" class="btn btn-danger">删除</button>
+                        <div>
+                            <button type="button" id="splitBtn" class="btn btn-secondary">拆分</button>
+                            <button type="button" class="cancel-btn">取消</button>
+                            <button type="submit" class="btn btn-primary">保存</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
