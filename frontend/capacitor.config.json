@@ -1,0 +1,12 @@
+{
+  "appId": "com.tianqi.schedule",
+  "appName": "日程规划",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  }
+}

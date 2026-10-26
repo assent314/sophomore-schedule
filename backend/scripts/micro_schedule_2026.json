@@ -1,0 +1,16 @@
+[
+  {"month": 10, "day": 17, "slot": "上午", "title": "人工智能模型与算法", "content": "深度学习", "teacher": "翁春跃", "week": "4"},
+  {"month": 10, "day": 17, "slot": "下午", "title": "AI+蛋白质设计", "content": "氨基酸到蛋白质结构层次", "teacher": "乔沛", "week": "4"},
+  {"month": 10, "day": 24, "slot": "上午", "title": "人工智能模型与算法", "content": "深度学习", "teacher": "翁春跃", "week": "5"},
+  {"month": 10, "day": 24, "slot": "下午", "title": "AI+蛋白质设计", "content": "蛋白质折叠与结构功能关系", "teacher": "乔沛", "week": "5"},
+  {"month": 10, "day": 31, "slot": "上午", "title": "人工智能模型与算法", "content": "前沿讲座（线上）", "teacher": "翁春跃/校外专家", "week": "6"},
+  {"month": 10, "day": 31, "slot": "下午", "title": "AI+蛋白质设计", "content": "蛋白质数据库与 Pymol 实操", "teacher": "乔沛", "week": "6"},
+  {"month": 11, "day": 7, "slot": "全天", "title": "AI+蛋白质设计", "content": "蛋白质配体相互作用", "teacher": "乔沛", "week": "7"},
+  {"month": 11, "day": 14, "slot": "全天", "title": "AI+蛋白质设计", "content": "MD 模拟与 GROMACS 实操", "teacher": "乔沛", "week": "8"},
+  {"month": 11, "day": 21, "slot": "全天", "title": "AI+蛋白质设计", "content": "从头设计蛋白质结构", "teacher": "乔沛", "week": "9"},
+  {"month": 11, "day": 28, "slot": "全天", "title": "AI+蛋白质设计", "content": "蛋白质工程与 AI 加速进化", "teacher": "乔沛", "week": "10"},
+  {"month": 12, "day": 5, "slot": "全天", "title": "AI+生物大数据挖掘", "content": "数据的清洗、描述性可视化", "teacher": "包莹玲", "week": "11"},
+  {"month": 12, "day": 13, "slot": "全天", "title": "AI+生物大数据挖掘", "content": "假设检验、方差分析及可视化", "teacher": "包莹玲", "week": "12", "note": "原第12周因四六级考试调整至周日"},
+  {"month": 12, "day": 19, "slot": "全天", "title": "AI+生物大数据挖掘", "content": "相关、回归分析及可视化", "teacher": "包莹玲", "week": "13"},
+  {"month": 12, "day": 26, "slot": "全天", "title": "AI+生物大数据挖掘", "content": "案例", "teacher": "包莹玲/校外专家", "week": "14"}
+]
