@@ -199,7 +199,7 @@ def day_window(plan_date: date_type, prof: dict, now_dt: datetime) -> tuple[date
     start = _combine(plan_date, prof.get("wake_time") or "07:00")
     end = _combine(plan_date, prof.get("sleep_time") or "23:30")
     if end <= start:
-        end = start + timedelta(hours=16)
+        end += timedelta(days=1)
     if plan_date == now_dt.date():
         start = max(start, _ceil_dt(now_dt + timedelta(minutes=5)))
     return start, end

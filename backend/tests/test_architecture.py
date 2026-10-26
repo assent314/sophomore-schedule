@@ -123,6 +123,16 @@ def test_manual_event_overlapping_meal_does_not_block_every_preview(client):
     assert manual["id"] in {ev["id"] for ev in client.get("/api/events", params={"date": day}).json()}
 
 
+def test_late_sleep_profile_keeps_actual_overnight_window():
+    from app.engine import day_window
+
+    day = date(2026, 10, 27)
+    start, end = day_window(day, {"wake_time": "11:00", "sleep_time": "02:00"},
+                            datetime(2026, 10, 26, 23, 0))
+    assert start == datetime(2026, 10, 27, 11, 0)
+    assert end == datetime(2026, 10, 28, 2, 0)
+
+
 def test_today_plan_does_not_recreate_past_meals(client):
     from app import db, engine
 
