@@ -22,10 +22,14 @@ export default function TopBar({
   onOpenProfile,
   search,
   setSearch,
+  onMenu,
 }) {
   return (
     <div className="topbar">
       <div className="topbar-left">
+        <button className="icon-btn mobile-menu-btn" onClick={onMenu} title="打开日历与待办菜单" aria-label="打开菜单">
+          <Icon name="menu" />
+        </button>
         <div className="logo">
           <span className="logo-mark">
             <Icon name="calendar" size={20} strokeWidth={2} />

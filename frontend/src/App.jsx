@@ -11,7 +11,9 @@ import ProfileModal from "./components/ProfileModal.jsx";
 import MemoryModal from "./components/MemoryModal.jsx";
 import KnowledgeModal from "./components/KnowledgeModal.jsx";
 import Toast from "./components/Toast.jsx";
-import { api, getApiBase } from "./api.js";
+import ConnectionSetup from "./components/ConnectionSetup.jsx";
+import AgentActivityModal from "./components/AgentActivityModal.jsx";
+import { api, getApiBase, isNativeShell } from "./api.js";
 import {
   addDays,
   addMonths,
@@ -73,11 +75,15 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+  const [agentActivityOpen, setAgentActivityOpen] = useState(false);
   const [eventDraft, setEventDraft] = useState(null);
   const [toast, setToast] = useState(null);
   const [statsDays, setStatsDays] = useState(initial.statsDays);
   const [loading, setLoading] = useState(false);
   const [connError, setConnError] = useState("");
+  const [connectionOpen, setConnectionOpen] = useState(isNativeShell() && !getApiBase());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [syncTick, setSyncTick] = useState(0);
 
   const notify = useCallback((message, error = false) => {
     setToast({ message, error, id: Date.now() });
@@ -126,13 +132,52 @@ export default function App() {
     }
   }, [view, cursor, notify]);
 
-  const refreshTasks = useCallback(() => {
-    api.tasks({}).then((list) => setTasks(list || [])).catch(() => {});
+  const refreshTasks = useCallback(async () => {
+    try {
+      const list = await api.tasks({});
+      setTasks(list || []);
+    } catch { /* 网络断开时由连接提示统一说明 */ }
   }, []);
 
   const refreshMemory = useCallback(() => {
     api.memory().then(setMemory).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const sync = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        await api.health();
+        if (!active) return;
+        setConnError("");
+        const range = rangeFor(view, cursor);
+        const [ev, ta, pr, st, me] = await Promise.all([
+          api.events({ start: range.start, end: range.end }),
+          api.tasks({}), api.profile(), api.settings(), api.memory(),
+        ]);
+        if (!active) return;
+        setEvents(ev || []);
+        setTasks(ta || []);
+        setProfile(pr);
+        setSettings(st);
+        setMemory(me);
+        setSyncTick((n) => n + 1);
+      } catch (e) {
+        if (active) setConnError(e.message || "连不上后端");
+      }
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") sync(); };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = window.setInterval(sync, 30000);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(timer);
+    };
+  }, [view, cursor]);
 
   const filteredEvents = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -240,7 +285,11 @@ export default function App() {
   const handlePlanApplied = async (res, planDate) => {
     setPlannerOpen(false);
     if (planDate) setCursor(planDate);
-    await Promise.all([refreshRange(), Promise.resolve(refreshTasks()), refreshMemory()]);
+    await Promise.all([
+      planDate && planDate !== cursor ? Promise.resolve() : refreshRange(),
+      refreshTasks(),
+      Promise.resolve(refreshMemory()),
+    ]);
     notify(`已生成 ${(res && res.events && res.events.length) || 0} 个方块`);
   };
 
@@ -278,6 +327,7 @@ export default function App() {
         onOpenProfile={() => setProfileOpen(true)}
         search={search}
         setSearch={setSearch}
+        onMenu={() => setSidebarOpen(true)}
       />
 
       <div className="main">
@@ -288,7 +338,7 @@ export default function App() {
               <span className="conn-hint">（手机请确认和电脑同一 WiFi、电脑端已启动「日程规划」）</span>
             </span>
             <span className="conn-actions">
-              <button className="btn btn-outline btn-sm" onClick={() => setProfileOpen(true)}>
+              <button className="btn btn-outline btn-sm" onClick={() => setConnectionOpen(true)}>
                 设置后端地址
               </button>
               <button
@@ -301,7 +351,10 @@ export default function App() {
           </div>
         ) : null}
         <div className="main-body">
+        {sidebarOpen ? <div className="mobile-sidebar-overlay" onClick={() => setSidebarOpen(false)} /> : null}
         <Sidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
           cursor={cursor}
           setCursor={jumpTo}
           events={events}
@@ -314,13 +367,14 @@ export default function App() {
           onOpenFeedback={() => setFeedbackOpen(true)}
           onOpenProfile={() => setProfileOpen(true)}
           onOpenKnowledge={() => setKnowledgeOpen(true)}
+          onOpenAgentActivity={() => { setSidebarOpen(false); setAgentActivityOpen(true); }}
           memoryStale={!!(memory && memory.stale)}
           onPlanner={() => setPlannerOpen(true)}
         />
 
         <div className="calendar-area">
           {view === "stats" ? (
-            <StatsView days={statsDays} setDays={setStatsDays} />
+            <StatsView days={statsDays} setDays={setStatsDays} refreshKey={syncTick} />
           ) : view === "month" ? (
             <MonthView
               cursor={cursor}
@@ -376,12 +430,16 @@ export default function App() {
           settings={settings}
           onClose={() => setProfileOpen(false)}
           onSaved={handleProfileSaved}
+          onOpenConnection={() => { setProfileOpen(false); setConnectionOpen(true); }}
         />
       ) : null}
 
       {memoryOpen ? <MemoryModal onClose={() => setMemoryOpen(false)} onUpdated={setMemory} /> : null}
 
       {knowledgeOpen ? <KnowledgeModal onClose={() => setKnowledgeOpen(false)} /> : null}
+      {agentActivityOpen ? <AgentActivityModal onClose={() => setAgentActivityOpen(false)} /> : null}
+
+      {connectionOpen ? <ConnectionSetup onClose={() => setConnectionOpen(false)} /> : null}
 
       <Toast toast={toast} onClose={() => setToast(null)} />
     </div>

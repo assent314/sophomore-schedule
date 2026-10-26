@@ -54,10 +54,11 @@ def extract_json(text: str) -> dict[str, Any]:
 
 
 class DeepSeekClient:
-    def __init__(self, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(self, api_key: str | None = None, base_url: str | None = None,
+                 timeout: float | None = None) -> None:
         self.api_key = (api_key if api_key is not None else config.DEEPSEEK_API_KEY).strip()
         self.base_url = (base_url or config.DEEPSEEK_BASE_URL).rstrip("/")
-        self.timeout = float(config.DEFAULT_SETTINGS["llm_timeout_seconds"])
+        self.timeout = timeout if timeout is not None else float(config.DEFAULT_SETTINGS["llm_timeout_seconds"])
 
     @property
     def configured(self) -> bool:

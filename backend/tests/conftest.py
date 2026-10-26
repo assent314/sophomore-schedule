@@ -27,11 +27,11 @@ def client():
 
 @pytest.fixture(autouse=True)
 def _clean_tables():
-    from app.models import AppSetting, Event, Feedback, MemoryDigest, PlanRun, Profile, Task
+    from app.models import AgentCapture, AppSetting, Event, Feedback, MemoryDigest, PlanRun, Profile, Task
 
     db.init_db()
     with db.SessionLocal() as s:
-        for model in (Event, Task, Feedback, MemoryDigest, PlanRun, Profile, AppSetting):
+        for model in (AgentCapture, Event, Task, Feedback, MemoryDigest, PlanRun, Profile, AppSetting):
             s.query(model).delete()
         s.commit()
     yield

@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import ssl
 import sys
 import threading
 import time
@@ -23,10 +24,17 @@ READY_TIMEOUT = 90
 NO_BROWSER = os.getenv("SCHEDULE_NO_BROWSER") == "1"
 
 
+def _local_url(port: int) -> str:
+    from app import config
+
+    scheme = "https" if config.TLS_CERTFILE and config.TLS_KEYFILE else "http"
+    return f"{scheme}://127.0.0.1:{port}"
+
+
 def _open_browser(port: int) -> None:
     if NO_BROWSER:
         return
-    webbrowser.open(f"http://127.0.0.1:{port}")
+    webbrowser.open(_local_url(port))
 
 
 def _msgbox(title: str, text: str) -> None:
@@ -41,8 +49,11 @@ def _msgbox(title: str, text: str) -> None:
 
 def _health_ok(port: int) -> bool:
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=HEALTH_TIMEOUT) as r:
-            return r.status == 200
+        url = _local_url(port) + "/api/health"
+        # 这里只探测本机进程。局域网客户端仍须验证服务器证书。
+        context = ssl._create_unverified_context() if url.startswith("https:") else None
+        with urllib.request.urlopen(url, timeout=HEALTH_TIMEOUT, context=context) as r:
+            return r.status == 200 and b'"ok":true' in r.read(200)
     except Exception:  # noqa: BLE001
         return False
 
@@ -108,7 +119,12 @@ def main() -> None:
 
         from app.main import app
 
-        uvicorn.run(app, host=config.HOST, port=port, log_level="info", log_config=None)
+        uvicorn.run(
+            app, host=config.HOST, port=port, log_level="info", log_config=None,
+            ssl_certfile=config.TLS_CERTFILE or None,
+            ssl_keyfile=config.TLS_KEYFILE or None,
+            proxy_headers=False,
+        )
     except Exception as exc:  # noqa: BLE001 — 端口占用 / 依赖缺失等
         logging.exception("启动失败")
         _msgbox(

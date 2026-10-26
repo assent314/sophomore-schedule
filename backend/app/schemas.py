@@ -215,10 +215,10 @@ class PlannedBlock(BaseModel):
 
 
 class PlanApplyRequest(BaseModel):
-    """把预览结果原样落库（不再调用 LLM，保证所见即所得）。"""
+    """只用 plan_run_id 提交服务端保存的预览；blocks 仅兼容旧客户端。"""
 
     date: date
-    blocks: list[PlannedBlock]
+    blocks: list[PlannedBlock] = Field(default_factory=list)
     plan_run_id: str | None = None
     mode: Literal["new", "adjust"] = "new"
     replace_ai_blocks: bool = True

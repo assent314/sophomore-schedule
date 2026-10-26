@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .. import nl, stats
 from ..db import get_db
 from ..models import Feedback
+from ..time_utils import local_today
 from ..schemas import FeedbackOut, FeedbackUpsert
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
@@ -23,7 +24,7 @@ def list_feedback(
     end: date_type | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[Feedback]:
-    end = end or date_type.today()
+    end = end or local_today(db)
     start = start or (end - timedelta(days=30))
     rows = db.scalars(
         select(Feedback).where(Feedback.date >= start, Feedback.date <= end).order_by(Feedback.date.desc())

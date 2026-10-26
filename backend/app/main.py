@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import config, db
-from .api import events, feedback, knowledge_api, plan, profile, settings_api, stats_api, tasks
+from .api import agent_api, events, feedback, knowledge_api, pairing, plan, profile, settings_api, stats_api, tasks
+from .access import remote_authorized
 
 
 @asynccontextmanager
@@ -23,13 +24,21 @@ app = FastAPI(title="日程规划 · 学习科学排程", version="1.0.0", lifes
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://localhost", "capacitor://localhost", "http://127.0.0.1:5173"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-for module in (tasks, events, feedback, profile, plan, stats_api, knowledge_api, settings_api):
+@app.middleware("http")
+async def require_remote_token(request: Request, call_next):
+    if request.url.path.startswith("/api/") and request.method != "OPTIONS":
+        if not remote_authorized(request):
+            return JSONResponse({"detail": "未配对：请在手机连接页填写电脑设置中显示的密钥"}, status_code=401)
+    return await call_next(request)
+
+
+for module in (tasks, events, feedback, profile, plan, stats_api, knowledge_api, settings_api, pairing, agent_api):
     app.include_router(module.router, prefix="/api")
 
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Icon from "../icons.jsx";
-import { api, getApiBase, setApiBase } from "../api.js";
+import { api } from "../api.js";
 import { ENERGY_PRESETS } from "../meta.js";
 
 const TABS = [
@@ -22,12 +22,13 @@ const hm = (v, fallback) => (v && String(v).length >= 5 ? String(v).slice(0, 5) 
 
 const EMPTY_COMMIT = { title: "", weekdays: [], start: "09:00", end: "10:00", category: "fixed", kind: "fixed" };
 
-export default function ProfileModal({ profile, settings, onClose, onSaved }) {
+export default function ProfileModal({ profile, settings, onClose, onSaved, onOpenConnection }) {
   const [tab, setTab] = useState("habits");
   const [form, setForm] = useState(null);
   const [ai, setAi] = useState(null);
   const [apiKey, setApiKey] = useState("");
-  const [serverAddr, setServerAddr] = useState(getApiBase());
+  const [pairing, setPairing] = useState(null);
+  const [pairingRevealed, setPairingRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
@@ -76,6 +77,10 @@ export default function ProfileModal({ profile, settings, onClose, onSaved }) {
       has_api_key: !!settings.has_api_key,
     });
   }, [settings]);
+
+  useEffect(() => {
+    api.pairing().then(setPairing).catch(() => setPairing(null));
+  }, []);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const setA = (key, value) => setAi((f) => ({ ...f, [key]: value }));
@@ -159,12 +164,6 @@ export default function ProfileModal({ profile, settings, onClose, onSaved }) {
       };
       if (apiKey.trim()) settingsBody.llm_api_key = apiKey.trim();
       const savedSettings = await api.saveSettings(settingsBody);
-      const nextBase = (serverAddr || "").trim();
-      if (nextBase !== getApiBase()) {
-        setApiBase(nextBase);
-        window.location.reload();
-        return;
-      }
       onSaved({ profile: savedProfile, settings: savedSettings });
     } catch (e) {
       setError(e.message || "保存失败");
@@ -366,16 +365,24 @@ export default function ProfileModal({ profile, settings, onClose, onSaved }) {
   ) : (
     <>
       <div className="field">
-        <label>后端地址（手机 App 用）</label>
-        <input
-          className="input"
-          value={serverAddr}
-          onChange={(e) => setServerAddr(e.target.value)}
-          placeholder="http://192.168.5.237:8000"
-        />
-        <div className="hint" style={{ marginTop: 6 }}>
-          浏览器里打开时不用改（自动同源）；安卓 App 里填电脑的局域网地址，保存后会重新连接。
-        </div>
+        <label>手机配对</label>
+        {pairing ? (
+          <>
+            <input className="input" type={pairingRevealed ? "text" : "password"}
+              readOnly value={pairing.token} onFocus={(e) => e.target.select()} />
+            <button className="btn btn-outline btn-sm" style={{ marginTop: 8 }}
+              onClick={() => setPairingRevealed((value) => !value)}>
+              {pairingRevealed ? "隐藏密钥" : "显示密钥"}
+            </button>
+            <div className="hint" style={{ marginTop: 6 }}>
+              在手机连接页填写电脑局域网地址和这段密钥。
+              {pairing.lan_enabled ? "电脑已开启局域网监听。" : "电脑目前只监听本机；手机连接前需在 backend/.env 设置 SCHEDULE_HOST=0.0.0.0 并重启。"}
+            </div>
+          </>
+        ) : <div className="hint">配对密钥只能在电脑本机查看。</div>}
+        <button className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={onOpenConnection}>
+          修改此设备的连接
+        </button>
       </div>
       <div className="field">
         <label>模型</label>

@@ -384,6 +384,12 @@ select {
   background: var(--sidebar-bg);
 }
 
+.mobile-menu-btn,
+.sidebar-close,
+.mobile-sidebar-overlay {
+  display: none;
+}
+
 .sidebar::-webkit-scrollbar,
 .calendar-scroll::-webkit-scrollbar,
 .drawer-body::-webkit-scrollbar,
@@ -1850,6 +1856,30 @@ svg.chart {
   .sidebar {
     display: none;
   }
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+  .mobile-sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 69;
+    background: rgba(32, 33, 36, 0.45);
+  }
+  .sidebar.mobile-open {
+    display: block;
+    position: fixed;
+    z-index: 70;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(86vw, 320px);
+    box-shadow: var(--shadow-2);
+  }
+  .sidebar-close {
+    display: flex;
+    margin-left: auto;
+  }
   .title-sub {
     display: none;
   }
@@ -1866,9 +1896,15 @@ svg.chart {
     flex: 0 0 56px;
   }
   .logo-text,
-  .btn-label,
-  .title-block {
+  .btn-label {
     display: none;
+  }
+  .title-block {
+    display: flex;
+    margin-left: 0;
+  }
+  .title-main {
+    font-size: 13px;
   }
   .topbar-left,
   .topbar-right {
@@ -1903,6 +1939,16 @@ svg.chart {
   .calendar-scroll {
     padding: 0 8px;
   }
+  .calendar-scroll.seven-day {
+    overflow-x: auto;
+  }
+  .seven-day .calendar-head,
+  .seven-day .time-grid {
+    min-width: 1036px;
+  }
+  .event-block {
+    touch-action: auto;
+  }
   .week-head-row,
   .hours-wrap {
     min-width: 0;
@@ -1911,6 +1957,20 @@ svg.chart {
     width: calc(100vw - 20px) !important;
     max-height: calc(100vh - 40px);
   }
+}
+
+.connection-overlay {
+  z-index: 100;
+}
+
+@media (pointer: coarse) {
+  .event-block {
+    touch-action: auto;
+  }
+}
+
+.connection-modal {
+  width: 500px;
 }
 
 @media (max-width: 480px) {

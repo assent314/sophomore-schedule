@@ -182,7 +182,7 @@ function BarRow({ label, rate, planned, done }) {
   );
 }
 
-export default function StatsView({ days, setDays }) {
+export default function StatsView({ days, setDays, refreshKey = 0 }) {
   const [stats, setStats] = useState(null);
   const [progress, setProgress] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -203,7 +203,7 @@ export default function StatsView({ days, setDays }) {
     return () => {
       alive = false;
     };
-  }, [days]);
+  }, [days, refreshKey]);
 
   const series = useMemo(() => (stats ? fullDaily(stats) : []), [stats]);
   const daysWithBlocks = useMemo(

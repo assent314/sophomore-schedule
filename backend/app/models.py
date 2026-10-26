@@ -150,3 +150,17 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
+
+
+class AgentCapture(Base):
+    """Agent 从对话中提取的结构化事实与调整记录；不保存整段聊天。"""
+
+    __tablename__ = "agent_captures"
+
+    id: Mapped[str] = mapped_column(String(24), primary_key=True, default=new_id)
+    dedupe_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    source: Mapped[str] = mapped_column(String(40), default="agent")
+    day: Mapped[date_type] = mapped_column(Date, index=True)
+    facts_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    plan_run_id: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -35,6 +36,25 @@ def update_settings(payload: SettingsUpdate, db: Session = Depends(get_db)) -> S
             continue
         if key == "llm_api_key" and not str(value).strip():
             continue
+        if key == "plan_buffer_ratio":
+            try:
+                number = float(value)
+                if not 0 <= number <= 0.8:
+                    raise ValueError()
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(400, "缓冲比例必须在 0 至 0.8 之间") from exc
+        if key == "llm_timeout_seconds":
+            try:
+                number = float(value)
+                if not 5 <= number <= 600:
+                    raise ValueError()
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(400, "模型超时必须在 5 至 600 秒之间") from exc
+        if key == "timezone":
+            try:
+                ZoneInfo(str(value))
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise HTTPException(400, "请输入有效的 IANA 时区，例如 Asia/Shanghai") from exc
         updates[key] = str(value)
     set_settings(db, updates)
     return get_settings(db)
@@ -45,7 +65,8 @@ async def test_llm(db: Session = Depends(get_db)) -> dict:
     st = effective_settings(db)
     if not st.get("llm_api_key"):
         raise HTTPException(400, "尚未配置 API Key")
-    client = DeepSeekClient(api_key=st["llm_api_key"], base_url=st["llm_base_url"])
+    client = DeepSeekClient(api_key=st["llm_api_key"], base_url=st["llm_base_url"],
+                            timeout=float(st.get("llm_timeout_seconds") or 150))
     try:
         models = await client.models()
     except LLMError as exc:

@@ -44,5 +44,5 @@ popd
 echo.
 echo 完成：%ROOT%\日程规划-Android.apk
 echo 安装到手机：把 APK 传到手机（微信/QQ 传文件或用数据线），点开安装。
-echo 手机和电脑要连同一个 WiFi，App 首次打开若连不上，去「设置 - AI 设置 - 后端地址」填电脑的局域网地址。
+echo 手机和电脑要连同一个 WiFi。App 首次打开需填写电脑地址和电脑设置中显示的配对密钥。
 endlocal

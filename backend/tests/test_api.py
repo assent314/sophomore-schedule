@@ -70,7 +70,7 @@ def test_feedback_upsert_and_parse(client):
 
 
 def test_plan_rule_engine_commit(client):
-    today = date.today().isoformat()
+    today = (date.today() + timedelta(days=1)).isoformat()
     # 固定一个上午 9:00-12:00 的会议，验证占用时段不被覆盖
     client.put("/api/profile", json={"wake_time": "07:00", "sleep_time": "23:00",
                                      "fixed_commitments": [{"title": "开会", "weekdays": [], "start": "09:00", "end": "12:00"}]})
@@ -104,7 +104,7 @@ def test_plan_rule_engine_commit(client):
 
 def test_plan_preview_apply_roundtrip(client):
     """预览的方块原样落库：块数、标题、时间与预览一致，且不再二次排程。"""
-    today = date.today().isoformat()
+    today = (date.today() + timedelta(days=1)).isoformat()
     client.put("/api/profile", json={"wake_time": "07:00", "sleep_time": "23:00", "fixed_commitments": []})
     r = client.post("/api/plan/preview", json={"date": today, "text": "复习线代 1 小时，写论文 2 小时"})
     assert r.status_code == 200, r.text

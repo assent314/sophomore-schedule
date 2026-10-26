@@ -81,8 +81,11 @@ export default function Sidebar({
   onOpenFeedback,
   onOpenProfile,
   onOpenKnowledge,
+  onOpenAgentActivity,
   memoryStale,
   onPlanner,
+  open = false,
+  onClose,
 }) {
   const [newTask, setNewTask] = useState("");
 
@@ -103,7 +106,8 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${open ? "mobile-open" : ""}`}>
+      <button className="icon-btn sidebar-close" onClick={onClose} aria-label="关闭菜单">×</button>
       <button className="create-btn" onClick={onPlanner}>
         <span className="plus">+</span>
         <span>用一句话排程</span>
@@ -181,6 +185,9 @@ export default function Sidebar({
         </div>
         <div className="side-link" onClick={onOpenKnowledge}>
           <Icon name="zap" size={18} /> <span>排程依据（规则卡）</span>
+        </div>
+        <div className="side-link" onClick={onOpenAgentActivity}>
+          <Icon name="refresh" size={18} /> <span>Agent 调整记录</span>
         </div>
         <div className="side-link" onClick={onOpenProfile}>
           <Icon name="settings" size={18} /> <span>习惯与偏好</span>

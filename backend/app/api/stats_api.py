@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import stats
 from ..db import get_db
+from ..time_utils import local_today
 
 router = APIRouter(tags=["stats"])
 
@@ -38,8 +39,8 @@ def get_memory(days: int = Query(default=28, ge=1, le=180), db: Session = Depend
     if digest is None:
         return {
             "kind": f"rolling{days}",
-            "period_start": (date_type.today()).isoformat(),
-            "period_end": (date_type.today()).isoformat(),
+            "period_start": local_today(db).isoformat(),
+            "period_end": local_today(db).isoformat(),
             "summary_md": "",
             "stats": {},
             "engine": "rule",
@@ -75,7 +76,8 @@ async def refresh_memory(
             data = stats.overview(db, days=days)
             prompt = _memory_prompt(data)
             try:
-                client = DeepSeekClient(api_key=st["llm_api_key"], base_url=st["llm_base_url"])
+                client = DeepSeekClient(api_key=st["llm_api_key"], base_url=st["llm_base_url"],
+                                        timeout=float(st.get("llm_timeout_seconds") or 150))
                 parsed, _usage = await client.chat_json(
                     "你是一个复盘助手，负责把统计数据写成一段简洁的中文复盘，供未来的排程模型参考。",
                     prompt,

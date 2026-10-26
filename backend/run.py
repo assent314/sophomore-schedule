@@ -12,6 +12,9 @@ def main() -> None:
         "app.main:app",
         host=config.HOST,
         port=config.PORT,
+        ssl_certfile=config.TLS_CERTFILE or None,
+        ssl_keyfile=config.TLS_KEYFILE or None,
+        proxy_headers=False,
         reload=False,
         log_level="info",
     )

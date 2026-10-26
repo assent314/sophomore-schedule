@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from . import knowledge
 from .models import Event, Feedback, MemoryDigest, PlanRun, Task
+from .time_utils import local_today
 
 WEEKDAY_LABEL = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
@@ -35,8 +36,8 @@ def _cat_label(key: str) -> str:
     return knowledge.EVENT_CATEGORY_LABEL.get(key, key)
 
 
-def _today() -> date_type:
-    return datetime.now().date()
+def _today(session: Session) -> date_type:
+    return local_today(session)
 
 
 def _minute_len(ev: Event) -> int:
@@ -62,7 +63,7 @@ def _bucket(hour: int) -> str:
 
 
 def overview(session: Session, days: int = 28, today: date_type | None = None) -> dict:
-    today = today or _today()
+    today = today or _today(session)
     start = today - timedelta(days=days - 1)
     events = session.scalars(
         select(Event).where(Event.plan_date >= start, Event.plan_date <= today, exclude_course_import())
@@ -249,7 +250,7 @@ def build_insights(stats: dict, feedbacks: list[Feedback], events: list[Event]) 
 
 def compact_for_prompt(session: Session, today: date_type | None = None) -> str:
     """给 LLM 的紧凑历史摘要（近 28 天 + 最新记忆摘要）。"""
-    today = today or _today()
+    today = today or _today(session)
     stats = overview(session, days=28, today=today)
     lines = [
         f"近 28 天：排入 {stats['total_planned_min'] // 60}h，完成率 {stats['completion_rate'] * 100:.0f}%，"
@@ -288,7 +289,7 @@ def refresh_memory(
     llm_summary: str | None = None,
 ) -> MemoryDigest:
     """重算滚动记忆。llm_summary 由调用方（异步 LLM）生成后传入。"""
-    today = today or _today()
+    today = today or _today(session)
     start = today - timedelta(days=days - 1)
     stats = overview(session, days=days, today=today)
 
@@ -343,7 +344,7 @@ def _json_safe(value):
 def is_stale(session: Session, digest: MemoryDigest | None, today: date_type | None = None) -> bool:
     if digest is None:
         return True
-    today = today or _today()
+    today = today or _today(session)
     if digest.period_end < today - timedelta(days=1):
         return True
     last_event = session.scalars(select(Event).order_by(Event.updated_at.desc()).limit(1)).first()
@@ -354,7 +355,7 @@ def is_stale(session: Session, digest: MemoryDigest | None, today: date_type | N
 
 def progress_series(session: Session, days: int = 30, today: date_type | None = None) -> list[dict]:
     """累积完成曲线，用于前端图表。"""
-    today = today or _today()
+    today = today or _today(session)
     start = today - timedelta(days=days - 1)
     events = session.scalars(
         select(Event).where(Event.plan_date >= start, Event.plan_date <= today, exclude_course_import())

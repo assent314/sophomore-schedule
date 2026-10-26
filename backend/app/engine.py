@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections import defaultdict
 from datetime import date as date_type
 from datetime import datetime, time, timedelta
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from . import config, knowledge, nl, stats
 from .llm import DeepSeekClient, LLMError
 from .models import Event, Feedback, MemoryDigest, PlanRun, Profile, Task
+from .settings_store import effective_settings
+from .time_utils import local_now
 
 GRID_MIN = 15
 MIN_BLOCK_MIN = 10
@@ -74,6 +77,25 @@ def _is_protected_event(ev: Event) -> bool:
     if (ev.plan_run_id or "") == COURSE_IMPORT_TAG:
         return True
     return (ev.kind or "") == "fixed"
+
+
+def _must_preserve(ev: Event, run_ids: set[str], *, mode: str, now_dt: datetime,
+                   replace_ai_blocks: bool, keep_done: bool) -> bool:
+    """手动事件、已完成事件和过去的事件永远不被自动排程覆盖。"""
+    return (
+        _is_protected_event(ev)
+        or not replace_ai_blocks
+        or ev.plan_run_id not in run_ids
+        or ev.status in {"done", "partial"}
+        or ev.start < now_dt
+    )
+
+
+def context_revision(ctx: dict) -> str:
+    """预览所依据的事实版本；新增/编辑事件或状态后必须重新预览。"""
+    stable = {key: ctx[key] for key in ("profile", "tasks", "events", "feedbacks", "memory_text", "buffer_ratio", "timezone")}
+    encoded = json.dumps(stable, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 # --------------------------------------------------------------------------- 上下文
@@ -219,10 +241,12 @@ def build_context(
     plan_date: date_type,
     *,
     mode: str = "new",
+    replace_ai_blocks: bool = True,
+    keep_done: bool = True,
     extra_constraints: list[str] | None = None,
     now_dt: datetime | None = None,
 ) -> dict:
-    now_dt = now_dt or datetime.now().replace(second=0, microsecond=0)
+    now_dt = now_dt or local_now(session).replace(second=0, microsecond=0)
     prof = profile_to_dict(get_profile(session))
     tasks = session.scalars(
         select(Task)
@@ -232,6 +256,7 @@ def build_context(
     events = session.scalars(
         select(Event).where(Event.plan_date == plan_date).order_by(Event.start.asc())
     ).all()
+    run_ids = set(session.scalars(select(PlanRun.id).where(PlanRun.plan_date == plan_date)).all())
     fb_rows = session.scalars(
         select(Feedback).order_by(Feedback.date.desc()).limit(14)
     ).all()
@@ -249,17 +274,29 @@ def build_context(
         for f in fb_rows
     ]
     yesterday = next((f for f in feedbacks if f["date"] == (plan_date - timedelta(days=1)).isoformat()), None)
+    current_feedback = next((f for f in feedbacks if f["date"] == plan_date.isoformat()), None)
     window = day_window(plan_date, prof, now_dt)
-    fixed = _fixed_blocks(plan_date, prof)
-    # 受保护的已有事件：锁定的 + 课表导入的（只展示不锁定，但排程要避开）+ kind=fixed 的固定安排
+    fixed = [
+        {**block, "start": max(block["start"], window[0])}
+        for block in _fixed_blocks(plan_date, prof)
+        if block["end"] > window[0] and block["start"] < window[1]
+    ]
+    # 所有会保留下来的事件都应在预览时占位，包括手动添加和已经完成的方块。
     locked = [
         {"title": ev.title, "start": ev.start, "end": ev.end, "kind": ev.kind, "category": ev.category}
         for ev in events
-        if _is_protected_event(ev)
+        if _must_preserve(ev, run_ids, mode=mode, now_dt=now_dt,
+                          replace_ai_blocks=replace_ai_blocks, keep_done=keep_done)
     ]
+    # 档案中的用餐/固定块若与已有手动或课程事件冲突，以日历上的实际事件为准。
+    fixed = [b for b in fixed if not any(
+        b["start"] < existing["end"] and existing["start"] < b["end"]
+        for existing in locked
+    )]
     occupied = [(b["start"], b["end"]) for b in fixed] + [(b["start"], b["end"]) for b in locked]
     free = subtract(window, occupied)
     free_min = sum(int((e - s).total_seconds() // 60) for s, e in free)
+    settings = effective_settings(session)
     return {
         "plan_date": plan_date,
         "now": now_dt,
@@ -269,14 +306,19 @@ def build_context(
         "events": [_event_dict(e) for e in events],
         "feedbacks": feedbacks,
         "yesterday": yesterday,
+        "current_feedback": current_feedback,
         "window": window,
         "fixed_blocks": fixed,
         "locked_blocks": locked,
+        "preserve_ids": {ev.id for ev in events if _must_preserve(
+            ev, run_ids, mode=mode, now_dt=now_dt,
+            replace_ai_blocks=replace_ai_blocks, keep_done=keep_done)},
         "occupied": occupied,
         "free": free,
         "free_min": free_min,
         "extra_constraints": extra_constraints or [],
-        "buffer_ratio": float(config.DEFAULT_SETTINGS["plan_buffer_ratio"]),
+        "buffer_ratio": max(0.0, min(0.8, float(settings["plan_buffer_ratio"]))),
+        "timezone": settings["timezone"],
         "memory_text": stats.compact_for_prompt(session, now_dt.date()),
         "stats": stats.overview(session, days=28, today=now_dt.date()),
         "llm": _llm_info(session),
@@ -410,7 +452,16 @@ def _block(
 
 def rule_plan(ctx: dict) -> dict:
     prof = ctx["profile"]
-    curve = prof.get("energy_curve") or knowledge.DEFAULT_ENERGY_CURVE
+    curve = list(prof.get("energy_curve") or knowledge.DEFAULT_ENERGY_CURVE)
+    current_feedback = ctx.get("current_feedback") or {}
+    for key, hours in (
+        ("energy_morning", range(6, 12)),
+        ("energy_afternoon", range(12, 18)),
+        ("energy_evening", range(18, 24)),
+    ):
+        if current_feedback.get(key) is not None:
+            for hour in hours:
+                curve[hour] = int(current_feedback[key])
     free = [list(seg) for seg in ctx["free"]]
     edges: set[datetime] = set()
     for seg in free:
@@ -423,9 +474,13 @@ def rule_plan(ctx: dict) -> dict:
     max_focus = max(25, min(int(prof.get("max_focus_min") or 90), 120))
     pref_block = max(25, min(int(prof.get("preferred_block_min") or 45), max_focus))
     break_min = max(5, min(int(prof.get("break_min") or 10), 30))
-    buffer_ratio = ctx.get("buffer_ratio") or 0.15
+    buffer_ratio = ctx.get("buffer_ratio")
+    if buffer_ratio is None:
+        buffer_ratio = 0.15
     capacity = int(ctx["free_min"] * (1 - buffer_ratio))
-    sleep_hours = (ctx.get("yesterday") or {}).get("sleep_hours")
+    sleep_hours = current_feedback.get("sleep_hours")
+    if sleep_hours is None:
+        sleep_hours = (ctx.get("yesterday") or {}).get("sleep_hours")
     notes: list[str] = []
     questions: list[str] = []
     rule_ids: list[str] = ["planning_fallacy_buffer", "circadian_peak", "micro_break"]
@@ -804,7 +859,8 @@ async def llm_plan(ctx: dict) -> dict:
     from .settings_store import effective_settings
 
     st = effective_settings(ctx["_session"]) if ctx.get("_session") else {}
-    client = DeepSeekClient(api_key=st.get("llm_api_key"), base_url=st.get("llm_base_url"))
+    client = DeepSeekClient(api_key=st.get("llm_api_key"), base_url=st.get("llm_base_url"),
+                            timeout=float(st.get("llm_timeout_seconds") or 150))
     user_prompt = build_user_prompt(ctx)
     parsed, usage = await client.chat_json(
         _SYSTEM_PROMPT, user_prompt, model=st.get("llm_model"), temperature=0.25, max_tokens=6000
@@ -878,10 +934,12 @@ async def execute_plan(
     now_dt: datetime | None = None,
 ) -> dict:
     ctx = build_context(
-        session, plan_date, mode=mode, extra_constraints=extra_constraints, now_dt=now_dt
+        session, plan_date, mode=mode, replace_ai_blocks=replace_ai_blocks,
+        keep_done=keep_done, extra_constraints=extra_constraints, now_dt=now_dt
     )
     ctx["_session"] = session
     ctx["input_text"] = text or ""
+    base_revision = context_revision(ctx)
     run = PlanRun(
         plan_date=plan_date,
         mode=mode,
@@ -915,6 +973,8 @@ async def execute_plan(
         if not text.strip() and ctx["tasks"]:
             plan["notes"] = (plan["notes"] + "\n未提供新的自然语言描述，已按待办池自动排程。").strip()
 
+    # 无论模型还是规则引擎，先把内部重叠整理进预览，避免提交时才悄悄改时间。
+    plan["blocks"] = _resolve_block_overlaps(plan["blocks"], [], plan_date)
     run.engine = plan["engine"]
     run.notes = plan.get("notes", "")[:4000]
     run.raw_response = (plan.get("raw") or "")[:200000]
@@ -937,7 +997,15 @@ async def execute_plan(
         run.events_created = len(events)
         session.commit()
     else:
-        session.rollback()
+        run.status = "preview"
+        run.raw_response = json.dumps({
+            "plan": plan,
+            "context_revision": base_revision,
+            "expires_at": (local_now(session) + timedelta(minutes=30)).isoformat(),
+            "replace_ai_blocks": replace_ai_blocks,
+            "keep_done": keep_done,
+        }, ensure_ascii=False, default=str)
+        session.commit()
 
     return {
         "plan_run_id": run.id,
@@ -1008,6 +1076,7 @@ def commit_plan(
     replace_ai_blocks: bool,
     keep_done: bool,
     save_tasks: bool,
+    strict_preview: bool = False,
 ) -> list[Event]:
     plan_date = ctx["plan_date"]
     blocks: list[dict] = plan["blocks"]
@@ -1046,11 +1115,7 @@ def commit_plan(
     if replace_ai_blocks:
         stmt = select(Event).where(Event.plan_date == plan_date)
         for ev in session.scalars(stmt).all():
-            if _is_protected_event(ev):
-                continue
-            if mode == "adjust" and ev.start < ctx["now"]:
-                continue
-            if keep_done and ev.status in {"done", "partial"}:
+            if ev.id in ctx["preserve_ids"]:
                 continue
             session.delete(ev)
         session.flush()
@@ -1059,7 +1124,7 @@ def commit_plan(
     existing_locked = {
         (ev.title, ev.start, ev.end)
         for ev in session.scalars(select(Event).where(Event.plan_date == plan_date)).all()
-        if _is_protected_event(ev)
+        if ev.id in ctx["preserve_ids"]
     }
     candidates: list[dict] = []
     for b in blocks:
@@ -1071,7 +1136,10 @@ def commit_plan(
         (ev.start, ev.end)
         for ev in session.scalars(select(Event).where(Event.plan_date == plan_date)).all()
     ]
-    candidates = _resolve_block_overlaps(candidates, kept_spans, plan_date)
+    resolved = _resolve_block_overlaps(candidates, kept_spans, plan_date)
+    if strict_preview and resolved != candidates:
+        raise ValueError("日程发生冲突，预览已失效，请重新生成预览")
+    candidates = resolved
 
     created: list[Event] = []
     for b in candidates:

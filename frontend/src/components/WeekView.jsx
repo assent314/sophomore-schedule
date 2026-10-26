@@ -81,6 +81,7 @@ function EventBlock({ ev, onEventClick, onStartMove, onStartResize, suppressRef 
         background: categoryColor(ev.category),
       }}
       onPointerDown={(evt) => {
+        if (evt.pointerType === "touch") return;
         if (evt.button !== 0) return;
         onStartMove(evt, ev);
       }}
@@ -106,6 +107,7 @@ function EventBlock({ ev, onEventClick, onStartMove, onStartResize, suppressRef 
           className="ev-resize"
           title="拖动调整时长"
           onPointerDown={(evt) => {
+            if (evt.pointerType === "touch") return;
             if (evt.button !== 0) return;
             onStartResize(evt, ev);
           }}
@@ -220,7 +222,7 @@ export default function WeekView({
       }
       render(d);
     };
-    const finish = () => {
+    const finish = (cancelled = false) => {
       const d = dragRef.current;
       dragRef.current = null;
       if (!d) return;
@@ -229,7 +231,7 @@ export default function WeekView({
       d.el.style.transform = "";
       const s = Math.round(d.s / SNAP) * SNAP;
       const e = Math.round(d.e / SNAP) * SNAP;
-      const changed = d.moved && (s !== d.s0 || e !== d.e0 || d.day !== d.ev.start.slice(0, 10));
+      const changed = !cancelled && d.moved && (s !== d.s0 || e !== d.e0 || d.day !== d.ev.start.slice(0, 10));
       if (d.moved) suppressRef.current = Date.now();
       if (!changed) {
         d.el.style.top = `${(d.s0 / 60) * HOUR_H}px`;
@@ -244,12 +246,14 @@ export default function WeekView({
       }
     };
     window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", finish);
-    window.addEventListener("pointercancel", finish);
+    const onUp = () => finish(false);
+    const onCancel = () => finish(true);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
     return () => {
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
     };
   }, []);
 
@@ -263,7 +267,7 @@ export default function WeekView({
 
   return (
     <>
-      <div className="calendar-scroll" ref={scrollRef}>
+      <div className={`calendar-scroll ${single ? "single-day" : "seven-day"}`} ref={scrollRef}>
         <div className="calendar-head sticky">
           <div className="week-head-row">
             {days.map((d) => {

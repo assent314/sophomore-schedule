@@ -5,10 +5,10 @@
  *   默认取上次保存的 localStorage.api_base，否则用 APK 打包时写入的默认地址。
  */
 export const DEFAULT_REMOTE_BASE =
-  (typeof window !== "undefined" && window.__SCHEDULE_DEFAULT_API__) || "http://192.168.5.237:8000";
+  (typeof window !== "undefined" && window.__SCHEDULE_DEFAULT_API__) || "";
 
 /** 是否运行在安卓/桌面壳里（Capacitor 下页面地址是 https://localhost，不能靠协议判断） */
-function isNativeShell() {
+export function isNativeShell() {
   if (typeof window === "undefined") return false;
   const cap = window.Capacitor;
   if (cap && typeof cap.isNativePlatform === "function") return cap.isNativePlatform();
@@ -28,19 +28,38 @@ function resolveBase() {
 let BASE = resolveBase();
 
 export function setApiBase(base) {
-  if (base && base.trim()) window.localStorage.setItem("api_base", base.trim());
+  const clean = (base || "").trim().replace(/\/+$/, "");
+  if (clean && !/^https?:\/\/[^/]+$/i.test(clean)) throw new Error("请输入完整的 http:// 或 https:// 地址");
+  if (clean) window.localStorage.setItem("api_base", clean);
   else window.localStorage.removeItem("api_base");
   BASE = resolveBase();
 }
 
 export function getApiBase() {
-  return BASE || window.location.origin;
+  return BASE || (isNativeShell() ? "" : window.location.origin);
+}
+
+export function getAccessToken() {
+  return window.localStorage.getItem("access_token") || "";
+}
+
+export function setAccessToken(value) {
+  const clean = (value || "").trim();
+  if (clean) window.localStorage.setItem("access_token", clean);
+  else window.localStorage.removeItem("access_token");
 }
 
 async function request(path, options = {}) {
+  if (isNativeShell() && !BASE) throw new Error("请先设置电脑后端地址和配对密钥");
+  const { headers = {}, ...rest } = options;
+  const token = getAccessToken();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
+    ...rest,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    },
   });
   if (res.status === 204) return null;
   let data = null;
@@ -72,6 +91,8 @@ const qs = (params = {}) => {
 
 export const api = {
   health: () => request("/api/health"),
+  pairing: () => request("/api/pairing"),
+  agentCaptures: (limit = 20) => request(`/api/agent/captures${qs({ limit })}`),
 
   events: (params) => request(`/api/events${qs(params)}`),
   createEvent: (body) => request("/api/events", { method: "POST", body: JSON.stringify(body) }),

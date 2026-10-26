@@ -50,12 +50,11 @@ if not exist "frontend\dist\index.html" (
 
 echo [4/4] 启动服务 ...
 echo.
-echo   本机访问：  http://127.0.0.1:8000
-echo   局域网访问：http://本机IPv4:8000  （手机连同一 WiFi 即可）
+echo   服务就绪后将自动打开本机浏览器。
+echo   手机访问需在 backend\.env 中开启局域网监听，并填写配对密钥。
 echo   停止服务：  Ctrl+C 或直接关闭本窗口
 echo.
-start "" http://127.0.0.1:8000
-"%PY%" backend\run.py
+"%PY%" backend\launcher.py
 
 endlocal
 pause

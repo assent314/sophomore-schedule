@@ -1,7 +1,7 @@
 """应用配置：环境变量默认值 + 运行期可覆盖项（数据库 settings 表）。
 
 同一份配置同时支持两种运行方式：
-- 源码运行：`python backend/run.py`，数据落在 backend/data/
+- 源码运行：`python backend/run.py`，数据落在项目根目录 data/
 - 打包运行：`日程规划.exe`（PyInstaller onefile），静态资源取自解包目录，
   数据落在 exe 同级的 data/，.env 依次在 exe 目录、exe/backend、exe/data 里找。
 """
@@ -52,8 +52,10 @@ DB_PATH = DATA_DIR / "schedule.db"
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 TIMEZONE = os.getenv("SCHEDULE_TIMEZONE", "Asia/Shanghai")
-HOST = os.getenv("SCHEDULE_HOST", "0.0.0.0")
+HOST = os.getenv("SCHEDULE_HOST", "127.0.0.1")
 PORT = int(os.getenv("SCHEDULE_PORT", "8000"))
+TLS_CERTFILE = os.getenv("SCHEDULE_TLS_CERTFILE", "").strip()
+TLS_KEYFILE = os.getenv("SCHEDULE_TLS_KEYFILE", "").strip()
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")

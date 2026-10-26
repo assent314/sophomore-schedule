@@ -59,10 +59,9 @@ export default function PlannerPanel({ date, onClose, onApplied }) {
     setApplying(true);
     setError("");
     try {
-      // 直接把预览里的方块落库，避免再调一次 LLM 导致「预览和结果不一致」
+        // 服务端按预览 ID 读取原始结果，避免客户端状态变化或再次调用模型。
       const res = await api.applyPlan({
         date: planDate,
-        blocks: result.blocks,
         plan_run_id: result.plan_run_id,
         mode,
         replace_ai_blocks: true,

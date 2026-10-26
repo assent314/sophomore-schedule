@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Event
+from ..time_utils import local_today
 from ..schemas import EventCreate, EventOut, EventUpdate
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -26,7 +27,7 @@ def list_events(
     if date:
         start = end = date
     if start is None:
-        start = date_type.today() - timedelta(days=7)
+        start = local_today(db) - timedelta(days=7)
     if end is None:
         end = start + timedelta(days=21)
     rows = db.scalars(
@@ -52,10 +53,11 @@ def update_event(event_id: str, payload: EventUpdate, db: Session = Depends(get_
     if not ev:
         raise HTTPException(404, "方块不存在")
     data = payload.model_dump(exclude_unset=True)
+    original_duration = ev.end - ev.start
     for key, value in data.items():
         setattr(ev, key, value)
     if "start" in data and "end" not in data:
-        ev.end = ev.start + (ev.end - ev.start)
+        ev.end = ev.start + original_duration
     if "start" in data:
         ev.plan_date = ev.start.date()
     if ev.end <= ev.start:

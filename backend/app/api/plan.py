@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date as date_type
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -11,6 +13,7 @@ from sqlalchemy.orm import Session
 from .. import engine
 from ..db import get_db
 from ..models import PlanRun
+from ..time_utils import local_now
 from ..schemas import PlanApplyRequest, PlanRequest, PlanResponse
 
 router = APIRouter(prefix="/plan", tags=["plan"])
@@ -43,6 +46,8 @@ async def preview_plan(payload: PlanRequest, db: Session = Depends(get_db)) -> d
         payload.text,
         mode=payload.mode,
         preview=True,
+        replace_ai_blocks=payload.replace_ai_blocks,
+        keep_done=payload.keep_done,
         extra_constraints=payload.extra_constraints,
         save_tasks=False,
     )
@@ -62,21 +67,32 @@ async def preview_plan(payload: PlanRequest, db: Session = Depends(get_db)) -> d
 
 @router.post("/apply", response_model=PlanResponse)
 def apply_plan(payload: PlanApplyRequest, db: Session = Depends(get_db)) -> PlanResponse:
-    """把 /plan/preview 的方块原样写成日历事件，避免二次调用 LLM 造成预览与实际不一致。"""
-    ctx = engine.build_context(db, payload.date, mode=payload.mode)
-    ctx["_session"] = db
-    plan = {
-        "blocks": [b.model_dump() for b in payload.blocks],
-        "task_updates": [],
-        "notes": "",
-    }
+    """只应用服务端保存的预览；基础日程变化时要求重新预览。"""
     run = db.get(PlanRun, payload.plan_run_id) if payload.plan_run_id else None
     if run is None:
-        run = PlanRun(
-            plan_date=payload.date, mode=payload.mode, input_text="", engine="llm", status="applied"
-        )
-        db.add(run)
-        db.flush()
+        raise HTTPException(404, "预览不存在，请重新生成")
+    if run.status != "preview":
+        raise HTTPException(409, "预览已应用或失效，请重新生成")
+    if run.plan_date != payload.date or run.mode != payload.mode:
+        raise HTTPException(400, "预览日期或模式不匹配")
+    try:
+        saved = json.loads(run.raw_response)
+        plan = saved["plan"]
+        expiry = datetime.fromisoformat(saved["expires_at"])
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(409, "预览记录不完整，请重新生成") from exc
+    if local_now(db) > expiry:
+        raise HTTPException(409, "预览已超过 30 分钟，请重新生成")
+    if (payload.replace_ai_blocks != saved["replace_ai_blocks"] or
+            payload.keep_done != saved["keep_done"]):
+        raise HTTPException(400, "预览选项不匹配")
+    ctx = engine.build_context(
+        db, payload.date, mode=payload.mode,
+        replace_ai_blocks=payload.replace_ai_blocks, keep_done=payload.keep_done,
+    )
+    if engine.context_revision(ctx) != saved["context_revision"]:
+        raise HTTPException(409, "日程或个人设置已变化，请重新生成预览")
+    ctx["_session"] = db
     try:
         events = engine.commit_plan(
             db,
@@ -87,6 +103,7 @@ def apply_plan(payload: PlanApplyRequest, db: Session = Depends(get_db)) -> Plan
             replace_ai_blocks=payload.replace_ai_blocks,
             keep_done=payload.keep_done,
             save_tasks=True,
+            strict_preview=True,
         )
     except Exception as exc:  # noqa: BLE001
         db.rollback()
