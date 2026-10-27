@@ -69,6 +69,11 @@ def test_feedback_upsert_and_parse(client):
     assert parsed["sleep_hours"] == 5
 
 
+def test_fatigue_is_not_inferred_as_low_mood(client):
+    parsed = client.post("/api/feedback/2026-10-27/parse", params={"text": "醒后仍很累，没听见闹钟"}).json()
+    assert "mood" not in parsed
+
+
 def test_plan_rule_engine_commit(client):
     today = (date.today() + timedelta(days=1)).isoformat()
     # 固定一个上午 9:00-12:00 的会议，验证占用时段不被覆盖

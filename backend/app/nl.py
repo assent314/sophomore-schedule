@@ -132,6 +132,4 @@ def parse_feedback_offline(text: str) -> dict:
                 m2 = re.search(rf"{w}[^。，,]{{0,12}}?(\d)\s*分", text)
                 if m2:
                     out[key] = int(m2.group(1))
-    if any(k in text for k in ["困", "累", "疲惫", "没精神", "低效"]):
-        out.setdefault("mood", 2)
     return out
