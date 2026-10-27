@@ -22,13 +22,13 @@ from .time_utils import local_today
 
 WEEKDAY_LABEL = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
-# 课表导入的「只展示」事件：出现在日历上，但不计入完成率统计，免得整学期课程把完成率拉垮
-COURSE_TAG = "course-import"
+# 课表和作息的「只展示」事件：占日历时间，不计入任务完成率。
+DISPLAY_ONLY_TAGS = ("course-import", "routine-plan")
 
 
-def exclude_course_import():
-    """统计口径里排除课表导入事件（plan_run_id 为空的正常事件都保留）。"""
-    return or_(Event.plan_run_id.is_(None), Event.plan_run_id != COURSE_TAG)
+def exclude_display_only():
+    """统计口径里排除课表与作息展示事件（普通事件仍保留）。"""
+    return or_(Event.plan_run_id.is_(None), Event.plan_run_id.not_in(DISPLAY_ONLY_TAGS))
 
 
 
@@ -66,7 +66,7 @@ def overview(session: Session, days: int = 28, today: date_type | None = None) -
     today = today or _today(session)
     start = today - timedelta(days=days - 1)
     events = session.scalars(
-        select(Event).where(Event.plan_date >= start, Event.plan_date <= today, exclude_course_import())
+        select(Event).where(Event.plan_date >= start, Event.plan_date <= today, exclude_display_only())
     ).all()
     feedbacks = session.scalars(
         select(Feedback).where(Feedback.date >= start, Feedback.date <= today).order_by(Feedback.date)
@@ -358,7 +358,7 @@ def progress_series(session: Session, days: int = 30, today: date_type | None = 
     today = today or _today(session)
     start = today - timedelta(days=days - 1)
     events = session.scalars(
-        select(Event).where(Event.plan_date >= start, Event.plan_date <= today, exclude_course_import())
+        select(Event).where(Event.plan_date >= start, Event.plan_date <= today, exclude_display_only())
     ).all()
     per_day: dict[date_type, dict] = defaultdict(lambda: {"planned": 0, "done": 0})
     for ev in events:

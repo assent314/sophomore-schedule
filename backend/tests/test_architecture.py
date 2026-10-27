@@ -133,6 +133,20 @@ def test_late_sleep_profile_keeps_actual_overnight_window():
     assert end == datetime(2026, 10, 28, 2, 0)
 
 
+def test_routine_event_stays_on_calendar_without_counting_as_work(client):
+    from app import db, engine, stats
+
+    day = date.today() + timedelta(days=2)
+    event = client.post("/api/events", json={
+        "title": "早餐", "start": f"{day}T08:00:00", "end": f"{day}T08:20:00",
+        "kind": "meal", "category": "life", "plan_run_id": "routine-plan",
+    }).json()
+    with db.SessionLocal() as session:
+        context = engine.build_context(session, day)
+        assert event["id"] in context["preserve_ids"]
+        assert stats.overview(session, days=1, today=day)["total_planned_min"] == 0
+
+
 def test_today_plan_does_not_recreate_past_meals(client):
     from app import db, engine
 

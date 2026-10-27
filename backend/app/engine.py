@@ -63,6 +63,7 @@ def _iso(dt: datetime) -> str:
 
 
 COURSE_IMPORT_TAG = "course-import"
+ROUTINE_PLAN_TAG = "routine-plan"
 
 
 def _is_protected_event(ev: Event) -> bool:
@@ -70,11 +71,12 @@ def _is_protected_event(ev: Event) -> bool:
 
     - locked：用户锁定的方块；
     - plan_run_id == "course-import"：从课表 PDF 导入的课程（设计上只展示、可拖动，但占时间）；
+    - plan_run_id == "routine-plan"：睡眠和用餐时间（展示并占时间，但不计完成率）；
     - kind == "fixed"：固定安排类事件（课表、会议）。
     """
     if ev.locked:
         return True
-    if (ev.plan_run_id or "") == COURSE_IMPORT_TAG:
+    if (ev.plan_run_id or "") in {COURSE_IMPORT_TAG, ROUTINE_PLAN_TAG}:
         return True
     return (ev.kind or "") == "fixed"
 
